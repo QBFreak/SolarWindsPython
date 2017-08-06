@@ -1,0 +1,269 @@
+#!/usr/bin/python
+"""
+ Requirements:
+  * curses			included with python
+  * pickle          included with python
+  * random			included with python
+  * sqlite3			included with python 2.5+
+  * OpenSimplex 	pip install opensimplex
+
+  TL;DR: Python 2.5+, pip install opensimplex
+"""
+import curses, random, solar, sqlite3, pickle, time
+from solar import Colors
+from opensimplex import OpenSimplex
+
+DBFILE = "solar.db"
+
+MAXWORLD = 2147483647
+MINWORLD = -2147483648
+
+## Terrain constants
+SHOWTERRAIN = True
+
+worldset = solar.TwoDimWorldSettings(
+    chunksize=21,
+    defmarker='#',
+    defcolor=Colors.DARK_GREEN,
+    #markermap={1:'#', 2:'#', 3:'#'},
+    markermap={1:'~', 2:'.', 3:'o'},
+    colormap={1:Colors.BRIGHT_BLUE, 2:Colors.DARK_GREEN, 3:Colors.DARK_GRAY},
+    width=2,
+    height=1)
+
+## Raw data display constants
+SHOWDATA = False
+CELLWIDTH = 8
+
+## DEBUG?
+SHOWDEBUG = True
+debugwin = "" # Needs an initial value if we intend to use it as a global
+
+# Globals to store min/max values
+minval = 1000
+maxval = -1000
+absminval = 1000
+absmaxval = -1000
+
+def main(stdscr):
+    "Main program"
+    global DISPSIZE, debugwin
+
+    # Find out the dimensions of our main winow
+    w = stdscr.getmaxyx()[1]
+    h = stdscr.getmaxyx()[0]
+
+    # Make sure the terrain window fits on the screen
+    maxsize = h - 1
+    if (w - 2) < ( worldset.width *  worldset.chunksize):
+        maxsize = int((w - 2) /  worldset.width)
+    if maxsize <  worldset.chunksize:
+         worldset.chunksize = maxsize
+
+    # Set up our color pairs
+    # curses.init_pair(0, curses.COLOR_WHITE, curses.COLOR_BLACK) # IMO this should be black, but curses wont let me init it, so it's now white...
+    curses.init_pair(Colors.DARK_RED, curses.COLOR_RED, curses.COLOR_BLACK)
+    curses.init_pair(Colors.DARK_GREEN, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    curses.init_pair(Colors.DARK_YELLOW, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    curses.init_pair(Colors.DARK_BLUE, curses.COLOR_BLUE, curses.COLOR_BLACK)
+    curses.init_pair(Colors.DARK_MAGENTA, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
+    curses.init_pair(Colors.DARK_CYAN, curses.COLOR_CYAN, curses.COLOR_BLACK)
+    curses.init_pair(Colors.BLACK, curses.COLOR_BLACK, curses.COLOR_BLACK)
+
+    # Create the window to show the debug messages
+    if SHOWDEBUG:
+        debugwin = stdscr.derwin(h - 1 - ( worldset.chunksize + 1), w - 1,  worldset.chunksize + 1, 0)
+        debugwin.scrollok(True)
+        debugwin.idlok(1)
+
+    # We can't show this any earlier, the debug window hasn't been created yet
+    debug("Program started")
+
+    # Create the window to display the terrain
+    if SHOWTERRAIN:
+        terrwin = stdscr.derwin( worldset.chunksize + 1, ( worldset.chunksize + 1) *  worldset.width, 0, 0) # Top-left
+
+    # Create the window the display the raw data
+    ## TODO: Check that there's room for the data display
+    if SHOWDATA:
+        datawin = stdscr.derwin( worldset.chunksize + 1, ( worldset.chunksize + 1) * CELLWIDTH, 0, w - (( worldset.chunksize + 1) * CELLWIDTH))
+
+    # Seed the random number generator
+    random.seed()
+
+    # Connect to the database
+    db = sqlite3.connect(DBFILE)
+    c = db.cursor()
+
+    # Set up the database
+    c.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name='chunks'")
+    tables = c.fetchall()
+    if len(tables) < 1:
+        # debug("Creating chunks table")
+        c.execute('''CREATE TABLE IF NOT EXISTS chunks
+    			     (x INTEGER, y INTEGER, data TEXT)''')
+    c.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name='objects'")
+    tables = c.fetchall()
+    if len(tables) < 1:
+        # debug("Creating objects table")
+        c.execute('''CREATE TABLE IF NOT EXISTS objects
+    			     (x INTEGER, y INTEGER, chunkX INTEGER, chunkY INTEGER, icon TEXT, width INTEGER, height INTEGER, color INTEGER)''')
+
+    # Set up the world
+    smp = OpenSimplex(seed=worldset.seed)
+    world = solar.TwoDimWorld(smp, worldset, db, c, debugwin)
+
+    chunkX = 0
+    chunkY = 0
+
+    # Load current chunk from the database/generate a new chunk if not found
+    dataset = world.loadchunk(chunkX, chunkY)
+
+    chunk = solar.TwoDimChunk(dataset, worldset, chunkX, chunkY)
+    painter = solar.TwoDimDrawing(worldset, debugwin)
+
+    # Create the player
+    objects = []
+    c.execute("SELECT rowid,* FROM objects")
+    records = c.fetchall()
+    if len(records) < 1:
+        # chunkX/Y and x/y all default to 0,0. All the other defaults are sane too
+        objects.append(solar.TwoDimMoveable(worldset, painter, db, c, terrwin, objid=1, debugwin=debugwin))
+        # debug("Object " + objects[-1].icon + " created at " + str(objects[-1].x) + "," + str(objects[-1].y))
+        c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(objects[-1].x) + "," + str(objects[-1].y) + ","  + str(objects[-1].chunkX) + "," + str(objects[-1].chunkY) + "," + "'" + str(objects[-1].icon) + "'" + "," + str(objects[-1].width) + "," + str(objects[-1].height) + "," + str(objects[-1].color) + ")")
+        db.commit()
+        # debug("Object " + objects[-1].icon + " written to the database")
+
+        objects.append(solar.TwoDimMoveable(worldset, painter, db, c, terrwin, icon='%', objid=1, debugwin=debugwin))
+        # debug("Object " + objects[-1].icon + " created at " + str(objects[-1].x) + "," + str(objects[-1].y))
+        c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(objects[-1].x) + "," + str(objects[-1].y) + "," + str(objects[-1].chunkX) + "," + str(objects[-1].chunkY) + "," + "'" + str(objects[-1].icon) + "'" + "," + str(objects[-1].width) + "," + str(objects[-1].height) + "," + str(objects[-1].color) + ")")
+        db.commit()
+        # debug("Object " + objects[-1].icon + " written to the database")
+
+        objects.append(solar.TwoDimMoveable(worldset, painter, db, c, terrwin, icon='&', color=Colors.BRIGHT_CYAN, x=5, y=5, objid=1, debugwin=debugwin))
+        # debug("Object " + objects[-1].icon + " created at " + str(objects[-1].x) + "," + str(objects[-1].y))
+        c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(objects[-1].x) + "," + str(objects[-1].y) + "," + str(objects[-1].chunkX) + "," + str(objects[-1].chunkY) + "," + "'" + str(objects[-1].icon) + "'" + "," + str(objects[-1].width) + "," + str(objects[-1].height) + "," + str(objects[-1].color) + ")")
+        db.commit()
+        # debug("Object " + objects[-1].icon + " written to the database")
+    else:
+        for rec in records:
+            objects.append(painter.db2moveable(rec, painter, db, c, terrwin, chunkX, chunkY))
+            # TODO: Find where we did [len(objects) - 1] (or was it records) and change to [-1]
+
+    if SHOWTERRAIN:
+        painter.drawchunk(c, chunkX, chunkY, terrwin, drawobjs=True)
+
+    curobj = 0
+    debug("Waiting for user input, Q to quit")
+    # Process user key presses
+    keypress = ""
+    while keypress.upper() != "E" and keypress.upper() != "Q":  # E, Q - Quit
+        keypress = stdscr.getkey()
+        if keypress == "KEY_LEFT":
+            try:
+                objects[curobj].moveoffset(0,-1)
+            except ValueError as e:
+                debug("Player at maximum western edge of chunk")
+        elif keypress == "KEY_UP":
+            try:
+                objects[curobj].moveoffset(-1,0)
+            except ValueError as e:
+                debug("Player at maximum northern edge of chunk")
+        elif keypress == "KEY_RIGHT":
+            try:
+                objects[curobj].moveoffset(0,1)
+            except ValueError as e:
+                debug("Player at maximum eastern edge of chunk")
+        elif keypress == "KEY_DOWN":
+            try:
+                objects[curobj].moveoffset(1,0)
+            except ValueError as e:
+                debug("Player at maximum southern edge of chunk")
+        elif keypress.upper() == "E" or keypress.upper() == "Q":
+            # Do nothing, loop will exit
+            # Of course in Python you can't do NOTHING, there has to be an indented
+            #  block below an elif:, so we just assign keypress to itself so we do
+            #  SOMETHING that equates to NOTHING
+            keypress = keypress
+        elif is_int(keypress):
+            if int(keypress) > 0 and int(keypress) < 10:
+                if int(keypress) <= len(objects):
+                    curobj = int(keypress) - 1
+                    debug("Object " + objects[curobj].icon + " selected")
+                else:
+                    debug("Invalid object " + str(keypress) + " selected")
+            else:
+                debug("Invalid object " + str(keypress) + " selected")
+        else:
+            debug("Unknown key pressed: " + str(keypress))
+
+    debug("User requested quit")
+    db.commit()
+    db.close()
+
+def debug(text):
+    if SHOWDEBUG:
+        printwin(debugwin, str(text))
+
+def updatestats(win):
+    # Clear the window to make room for the updated stats
+    win.clear()
+    printwin(win, str(minval).rjust(3))
+    printwin(win, str(maxval).rjust(3))
+    printwin(win, "")
+    printwin(win, str(absminval).rjust(3))
+    printwin(win, str(absmaxval).rjust(3))
+
+def printset(txtwin, dataset):
+    # Global values to save min/max values out of dataset
+    global minval, maxval, absminval, absmaxval
+    # Clear the window so there's room for the new values
+    txtwin.clear()
+    prtline = ""
+    # Init the min/max values to something obviously out of bounds so they get
+    #  updated on the next check
+    minval = 1000
+    maxval = -1000
+    # Loop through the dataset and add the data to the window
+    for x in range(len(dataset)):
+        for y in range(len(dataset[0])):
+            # Buffer a row of data to be written to the window all at once
+            #  each value is converted to a string and the length is adjusted
+            prtline += str(dataset[x][y])[:CELLWIDTH - 1].rjust(CELLWIDTH)
+            # Check and update the min/max values
+            if dataset[x][y] < minval:
+                minval = dataset[x][y]
+            if dataset[x][y] < absminval:
+                absminval = dataset[x][y]
+            if dataset[x][y] > maxval:
+                maxval = dataset[x][y]
+            if dataset[x][y] > absmaxval:
+                absmaxval = dataset[x][y]
+        # At the end of each row, write the buffered row to the window
+        printwin(txtwin, prtline)
+        prtline = ""
+    # Display the updated window on the screen
+    txtwin.refresh()
+
+def printwin(win, text):
+    "Write the text to a curses window, followed by a newline (print if no window)"
+    # Check and see if we were passed a curses window
+    if str(type(win)) == "<type '_curses.curses window'>":
+        # Add the text to the window, along with a newline
+        win.addstr(str(text) + "\n")
+        # Refresh the window to update the screen
+        win.refresh()
+    else:
+        # No curses window, print the text to stdout
+        print(str(text))
+
+def is_int(val):
+    try:
+        val = int(val)
+        return True
+    except Exception as e:
+        return False
+
+## Use the curses wrapper to call main so that the console still gets cleaned
+##  up if we throw an unhandled exception
+curses.wrapper(main)
