@@ -145,7 +145,7 @@ class TwoDimCommon(InputValidation):
         # TODO: Standardize to self.world so we don't need getattr(self, 'attrname', defaultvalue)
         #        and then update the other xxx2yyy() functions to match
         # self.debug("rel2abs(" + str(x) + "," + str(y) + ") = " + str(x+getattr(self, 'xoffset', 0)) + "," + str(y+getattr(self, 'yoffset', 0)) + " (" + str(getattr(self, 'chunksize', self.world.chunksize)) + ")")
-        # x, y = self.validate_rel(x, y)
+        x, y = self.validate_rel(x, y)
         x = x + self.xoffset
         y = y + self.yoffset
         return (x, y)
@@ -204,14 +204,18 @@ class TwoDimCommon(InputValidation):
             raise TypeError('x is not type int')
         if type(y) != type(int()):
             raise TypeError('y is not type int')
-        if x < 0 - self.xoffset:
-            raise ValueError("x < " + str(0 - self.xoffset) + " (" + str(x) + ")")
-        if x > self.xoffset:
-            raise ValueError("x > " + str(self.xoffset) + " (" + str(x) + ")")
-        if y < 0 - self.yoffset:
-            raise ValueError("y < " + str(0 - self.yoffset) + " (" + str(y) + ")")
-        if y > self.yoffset:
-            raise ValueError("y > " + str(self.yoffset) + " (" + str(y) + ")")
+
+        #  The definition of relative coordinates has been expanded to encompass the
+        #   entire map, so the checks ensure it is within the current chunk are no
+        #   longer valid.
+        # if x < 0 - self.xoffset:
+        #     raise ValueError("x < " + str(0 - self.xoffset) + " (" + str(x) + ")")
+        # if x > self.xoffset:
+        #     raise ValueError("x > " + str(self.xoffset) + " (" + str(x) + ")")
+        # if y < 0 - self.yoffset:
+        #     raise ValueError("y < " + str(0 - self.yoffset) + " (" + str(y) + ")")
+        # if y > self.yoffset:
+        #     raise ValueError("y > " + str(self.yoffset) + " (" + str(y) + ")")
         return (x, y)
 
     def validate_abs(self, x, y):
