@@ -15,12 +15,6 @@ from opensimplex import OpenSimplex
 
 DBFILE = "solar.db"
 
-MAXWORLD = 2147483647
-MINWORLD = -2147483648
-
-## Terrain constants
-SHOWTERRAIN = True
-
 worldset = solar.TwoDimWorldSettings(
     chunksize=21,
     defmarker='#',
@@ -31,23 +25,13 @@ worldset = solar.TwoDimWorldSettings(
     width=2,
     height=1)
 
-## Raw data display constants
-SHOWDATA = False
-CELLWIDTH = 8
-
 ## DEBUG?
 SHOWDEBUG = True
 debugwin = "" # Needs an initial value if we intend to use it as a global
 
-# Globals to store min/max values
-minval = 1000
-maxval = -1000
-absminval = 1000
-absmaxval = -1000
-
 def main(stdscr):
     "Main program"
-    global DISPSIZE, debugwin
+    global debugwin
 
     # Find out the dimensions of our main winow
     w = stdscr.getmaxyx()[1]
@@ -80,13 +64,7 @@ def main(stdscr):
     debug("Program started")
 
     # Create the window to display the terrain
-    if SHOWTERRAIN:
-        terrwin = stdscr.derwin( worldset.chunksize + 1, ( worldset.chunksize + 1) *  worldset.width, 0, 0) # Top-left
-
-    # Create the window the display the raw data
-    ## TODO: Check that there's room for the data display
-    if SHOWDATA:
-        datawin = stdscr.derwin( worldset.chunksize + 1, ( worldset.chunksize + 1) * CELLWIDTH, 0, w - (( worldset.chunksize + 1) * CELLWIDTH))
+    terrwin = stdscr.derwin( worldset.chunksize + 1, ( worldset.chunksize + 1) *  worldset.width, 0, 0) # Top-left
 
     # Seed the random number generator
     random.seed()
@@ -150,8 +128,7 @@ def main(stdscr):
             objects.append(painter.db2moveable(rec, painter, db, c, terrwin, chunkX, chunkY))
             # TODO: Find where we did [len(objects) - 1] (or was it records) and change to [-1]
 
-    if SHOWTERRAIN:
-        painter.drawchunk(c, chunkX, chunkY, terrwin, drawobjs=True)
+    painter.drawchunk(c, chunkX, chunkY, terrwin, drawobjs=True)
 
     curobj = 0
     debug("Waiting for user input, Q to quit")
@@ -186,8 +163,11 @@ def main(stdscr):
             #  SOMETHING that equates to NOTHING
             keypress = keypress
         elif is_int(keypress):
+            # If the key pressed was a number (1-9), select an object
             if int(keypress) > 0 and int(keypress) < 10:
+                # Make sure the selected object exists
                 if int(keypress) <= len(objects):
+                    # Select it
                     curobj = int(keypress) - 1
                     debug("Object " + objects[curobj].icon + " selected")
                 else:
@@ -205,46 +185,6 @@ def debug(text):
     if SHOWDEBUG:
         printwin(debugwin, str(text))
 
-def updatestats(win):
-    # Clear the window to make room for the updated stats
-    win.clear()
-    printwin(win, str(minval).rjust(3))
-    printwin(win, str(maxval).rjust(3))
-    printwin(win, "")
-    printwin(win, str(absminval).rjust(3))
-    printwin(win, str(absmaxval).rjust(3))
-
-def printset(txtwin, dataset):
-    # Global values to save min/max values out of dataset
-    global minval, maxval, absminval, absmaxval
-    # Clear the window so there's room for the new values
-    txtwin.clear()
-    prtline = ""
-    # Init the min/max values to something obviously out of bounds so they get
-    #  updated on the next check
-    minval = 1000
-    maxval = -1000
-    # Loop through the dataset and add the data to the window
-    for x in range(len(dataset)):
-        for y in range(len(dataset[0])):
-            # Buffer a row of data to be written to the window all at once
-            #  each value is converted to a string and the length is adjusted
-            prtline += str(dataset[x][y])[:CELLWIDTH - 1].rjust(CELLWIDTH)
-            # Check and update the min/max values
-            if dataset[x][y] < minval:
-                minval = dataset[x][y]
-            if dataset[x][y] < absminval:
-                absminval = dataset[x][y]
-            if dataset[x][y] > maxval:
-                maxval = dataset[x][y]
-            if dataset[x][y] > absmaxval:
-                absmaxval = dataset[x][y]
-        # At the end of each row, write the buffered row to the window
-        printwin(txtwin, prtline)
-        prtline = ""
-    # Display the updated window on the screen
-    txtwin.refresh()
-
 def printwin(win, text):
     "Write the text to a curses window, followed by a newline (print if no window)"
     # Check and see if we were passed a curses window
@@ -258,11 +198,8 @@ def printwin(win, text):
         print(str(text))
 
 def is_int(val):
-    try:
-        val = int(val)
-        return True
-    except Exception as e:
-        return False
+    "Returns true if val is an integer"
+    return type(val) == type(int())
 
 ## Use the curses wrapper to call main so that the console still gets cleaned
 ##  up if we throw an unhandled exception
