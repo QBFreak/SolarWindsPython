@@ -163,12 +163,10 @@ class TwoDimCommon(InputValidation):
          from Absolute coordinates  (0,0=top,left and each step is (self.width) or (self.height) characters)
          to Screen Coordinates      (0,0=top,left and each step is 1 character)
         """
-        # TODO: Standardize to self.world so we don't need getattr(self, 'attrname', defaultvalue)
-        #        and then update the other xxx2yyy() functions to match
-        x = self.validate_int(x, 'x', 0, getattr(self, 'chunksize', self.world.chunksize))
-        y = self.validate_int(y, 'y', 0, getattr(self, 'chunksize', self.world.chunksize))
-        x = x * getattr(self, 'height', self.world.height)
-        y = y * getattr(self, 'width', self.world.width)
+        x = self.validate_int(x, 'x', 0, self.world.chunksize)
+        y = self.validate_int(y, 'y', 0, self.world.chunksize)
+        x = x * self.world.height
+        y = y * self.world.width
         return (x, y)
 
     def screen2abs(self, x, y):
@@ -177,12 +175,10 @@ class TwoDimCommon(InputValidation):
          from Screen Coordinates    (0,0=top,left and each step is 1 character)
          to Absolute coordinates    (0,0=top,left and each step is (self.width) or (self.height) characters)
         """
-        # TODO: Standardize to self.world so we don't need getattr(self, 'attrname', defaultvalue)
-        #        and then update the other xxx2yyy() functions to match
-        x = self.validate_int(x, 'x', 0, self.chunksize)
-        y = self.validate_int(y, 'y', 0, self.chunksize)
-        x = x / self.height
-        y = y / self.width
+        x = self.validate_int(x, 'x', 0, self.world.chunksize)
+        y = self.validate_int(y, 'y', 0, self.world.chunksize)
+        x = x / self.world.height
+        y = y / self.world.width
         return (x, y)
 
     def color2attr(self, color):
@@ -219,14 +215,12 @@ class TwoDimCommon(InputValidation):
             raise TypeError('y is not type int')
         if x < 0:
             raise ValueError("x < 0 (" + str(x) + ")")
-        # TODO: Standardize to self.world so we don't need getattr(self, 'attrname', defaultvalue)
-        #        and then update the other xxx2yyy() functions to match
-        if x > getattr(self, 'chunksize', self.world.chunksize) - 1:
-            raise ValueError("x > " + str(getattr(self, 'chunksize', self.world.chunksize) - 1) + " (" + str(x) + ")")
+        if x > self.world.chunksize - 1:
+            raise ValueError("x > " + str(self.world.chunksize - 1) + " (" + str(x) + ")")
         if y < 0:
             raise ValueError("y < 0 (" + str(y) + ")")
-        if y > getattr(self, 'chunksize', self.world.chunksize) - 1:
-            raise ValueError("y > " + str(getattr(self, 'chunksize', self.world.chunksize) - 1) + " (" + str(y) + ")")
+        if y > self.world.chunksize - 1:
+            raise ValueError("y > " + str(self.world.chunksize - 1) + " (" + str(y) + ")")
         return (x, y)
 
     def db2object(self, record, chunkX, chunkY):
@@ -355,8 +349,8 @@ class TwoDimChunk(TwoDimCommon):
     def __init__(self, dataset, world, chunkX=0, chunkY=0):
         self.world = world
         # Validate and set dataset
-        self.dataset = self.validate_list(dataset, 'dataset', mincount=world.chunksize, maxcount=world.chunksize)
-        self.dataset[0] = self.validate_list(dataset[0], 'dataset', mincount=world.chunksize, maxcount=world.chunksize)
+        self.dataset = self.validate_list(dataset, 'dataset', mincount=self.world.chunksize, maxcount=self.world.chunksize)
+        self.dataset[0] = self.validate_list(dataset[0], 'dataset', mincount=self.world.chunksize, maxcount=self.world.chunksize)
         # Validate and set chunkX
         self.chunkX = self.validate_int(chunkX, 'chunkX')
         # Validate and set chunkY
