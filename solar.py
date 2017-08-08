@@ -128,8 +128,6 @@ class TwoDimCommon(InputValidation):
          from Absolute coordinates  (0,0=top,left and each step is (self.width) or (self.height) characters)
          to Relative Coordinates    (0,0=center and each step is (self.width) or (self.height) characters)
         """
-        # TODO: Standardize to self.world so we don't need getattr(self, 'attrname', defaultvalue)
-        #        and then update the other xxx2yyy() functions to match
         # self.debug("abs2rel(" + str(x) + "," + str(y) + ") = " + str(x-self.xoffset) + "," + str(y-self.yoffset) + " (" + str(getattr(self, 'chunksize', self.world.chunksize)) + ")")
         x, y = self.validate_abs(x, y)
         x = x - self.xoffset
@@ -142,8 +140,6 @@ class TwoDimCommon(InputValidation):
          from Relative Coordinates  (0,0=center and each step is (self.width) or (self.height) characters)
          to Absolute coordinates    (0,0=top,left and each step is (self.width) or (self.height) characters)
         """
-        # TODO: Standardize to self.world so we don't need getattr(self, 'attrname', defaultvalue)
-        #        and then update the other xxx2yyy() functions to match
         # self.debug("rel2abs(" + str(x) + "," + str(y) + ") = " + str(x+getattr(self, 'xoffset', 0)) + "," + str(y+getattr(self, 'yoffset', 0)) + " (" + str(getattr(self, 'chunksize', self.world.chunksize)) + ")")
         x, y = self.validate_rel(x, y)
         x = x + self.xoffset
@@ -156,6 +152,7 @@ class TwoDimCommon(InputValidation):
          from Relative Coordinates  (0,0=center and each step is (self.width) or (self.height) characters)
          to Screen Coordinates      (0,0=top,left and each step is 1 character)
         """
+        x, y = self.validate_rel(x, y)
         x, y = self.rel2abs(x, y)
         x, y = self.abs2screen(x, y)
         return (x, y)
@@ -180,6 +177,8 @@ class TwoDimCommon(InputValidation):
          from Screen Coordinates    (0,0=top,left and each step is 1 character)
          to Absolute coordinates    (0,0=top,left and each step is (self.width) or (self.height) characters)
         """
+        # TODO: Standardize to self.world so we don't need getattr(self, 'attrname', defaultvalue)
+        #        and then update the other xxx2yyy() functions to match
         x = self.validate_int(x, 'x', 0, self.chunksize)
         y = self.validate_int(y, 'y', 0, self.chunksize)
         x = x / self.height
@@ -204,18 +203,8 @@ class TwoDimCommon(InputValidation):
             raise TypeError('x is not type int')
         if type(y) != type(int()):
             raise TypeError('y is not type int')
-
-        #  The definition of relative coordinates has been expanded to encompass the
-        #   entire map, so the checks ensure it is within the current chunk are no
-        #   longer valid.
-        # if x < 0 - self.xoffset:
-        #     raise ValueError("x < " + str(0 - self.xoffset) + " (" + str(x) + ")")
-        # if x > self.xoffset:
-        #     raise ValueError("x > " + str(self.xoffset) + " (" + str(x) + ")")
-        # if y < 0 - self.yoffset:
-        #     raise ValueError("y < " + str(0 - self.yoffset) + " (" + str(y) + ")")
-        # if y > self.yoffset:
-        #     raise ValueError("y > " + str(self.yoffset) + " (" + str(y) + ")")
+        # Relative coordinates are no longer limited in scope to a single chunk
+        # TODO: Update coord doc at ToF
         return (x, y)
 
     def validate_abs(self, x, y):
@@ -275,6 +264,7 @@ class TwoDimWorldSettings(InputValidation):
     def __init__(self,
         seed=1234567890,
         chunksize=9,
+        # Marker settings
         defmarker='#',
         defcolor=Colors.DARK_GREEN,
         markermap={1:'#'},
@@ -376,6 +366,7 @@ class TwoDimDrawing(TwoDimCommon):
     def __init__(self, worldsettings, debugwin=0):
         self.world = worldsettings
         self.debugwin = debugwin
+        # TODO: Use superclass constructor instead to set xoffset/yoffset
         self.xoffset = int(worldsettings.chunksize / 2)
         self.yoffset = int(worldsettings.chunksize / 2)
 
@@ -394,9 +385,6 @@ class TwoDimDrawing(TwoDimCommon):
         for x in range(self.world.chunksize):
             for y in range(self.world.chunksize):
                 self.drawmarker(dataset, win, x, y, xoffset, yoffset, refresh=False)
-                # scrx, scry = self.abs2screen(x + xoffset, y + yoffset)
-                # win.addstr(scrx, scry, self.getmarker(x,y,dataset)*self.world.width)
-                # win.chgat(scrx, scry, self.world.width, self.getcolor(x,y,dataset))
         dbcur.execute("SELECT rowid,* FROM objects")
         records = dbcur.fetchall()
         if len(records) > 0:
@@ -409,6 +397,7 @@ class TwoDimDrawing(TwoDimCommon):
     def eraseobject(self, dbcur, objid, dataset, win, x, y, chunkX=0, chunkY=0, xoffset=0, yoffset=0, refresh=True):
         # TODO: Data validation, documentation
         # REMOVE? Pretty sure we're not using this
+        #  at least TEST it...
         dbcur.execute("SELECT rowid,* FROM objects WHERE rowid IS NOT " + str(objid) + " AND x=" + str(x) + " AND y=" + str(y))
         records = dbcur.fetchall()
         if len(records):
@@ -426,7 +415,6 @@ class TwoDimDrawing(TwoDimCommon):
 
     def drawobjectfromrecord(self, rec, chunkX, chunkY, win, xoffset=0, yoffset=0, refresh=True):
         # TODO: Data validation, documentation
-        # self.debug("RECORD: " + str(rec))
         obj = self.db2object(rec, chunkX, chunkY)
         # self.debug("Drawing object " + str(rec[0]) + " at " + str(obj.x) + "," + str(obj.y))
         scrx, scry = self.rel2screen(obj.x + xoffset, obj.y + yoffset)
@@ -438,6 +426,7 @@ class TwoDimDrawing(TwoDimCommon):
     def drawlocation(self, dbcur, win, chunkX, chunkY, x, y, xoffset=0, yoffset=0, refresh=True):
         # TODO: Data validation, documentation
         # TODO: Objects need chunkX and chunkY
+        #        or do we just calculate it from x,y? That seems cleaner
         # self.debug("DRAWLOCATION(" + str(x) + "," + str(y) + ")")
         dbcur.execute("SELECT data FROM chunks WHERE x=" + str(chunkX) + " AND y=" + str(chunkY))
         records = dbcur.fetchall()
@@ -450,12 +439,12 @@ class TwoDimDrawing(TwoDimCommon):
         if len(records) > 0:
             # self.debug("There are " + str(len(records)) + " objects to be displayed (DRAWLOCATION)")
             for rec in records:
-                # self.debug("RECORD: " + str(rec))
                 self.drawobjectfromrecord(rec, chunkX, chunkY, win, xoffset, yoffset, refresh=False)
                 if refresh:
                     win.refresh()
         else:
             self.drawmarker(dataset, win, x, y, xoffset, yoffset, refresh=refresh)
+
     def getval(self, x, y, dataset):
         "Returns the terrain value at the absolute x,y coordinates"
         x = self.validate_int(x, 'x', minval=0, maxval=self.world.chunksize)
@@ -509,21 +498,9 @@ class TwoDimObject(TwoDimCommon):
         # Validate and set the coordinates of the chunk
         self.chunkX = self.validate_int(chunkX, "chunkX")
         self.chunkY = self.validate_int(chunkY, "chunkY")
-        # Make sure x and y are integers, and then convert to absolute coordinates
-        # x, y = self.abs2rel(self.validate_int(x, 'x'), self.validate_int(y, 'y'))
-        self.x, self.y = self.validate_rel(x, y) #self.rel2abs(self.validate_int(x, 'x'), self.validate_int(y, 'y'))
+        # Make sure x and y are integers
+        self.x, self.y = self.validate_rel(x, y)
 
-        ## TODO: Now, I understand why we validate x,y as absolute coordinates,
-        ##        it's the easiest way to ensure they fall in (0 <= x/y <= chunksize).
-        ##        What I DON'T understand is why they aren't converted BACK (below).
-        ##        I also don't understand the above abs2rel(), aren't they passed in
-        ##        to the constructor as relative coords? (0,0) being center
-        ##        But IT WORKS. So I don't dare touch it. Yet.
-
-        # Validate and set x and y (as absolute coordinates)
-        # x, y = self.rel2abs(x, y)
-        # self.x = self.validate_int(x, "x", minval=0, maxval=self.world.chunksize)
-        # self.y = self.validate_int(y, "y", minval=0, maxval=self.world.chunksize)
         # Validate and set icon character
         self.icon = self.validate_str(icon, 'icon', blank=False)
         # Validate and set color value
@@ -584,6 +561,7 @@ class TwoDimMoveable(TwoDimObject):
         #  the reason we do this before the validation is so the debug displays regardless
         relx, rely = self.abs2rel(newX, newY)
         # self.debug("Moving object " + self.icon + " to absolute coordinates " + str(newX) + "," + str(newY) + " (" + str(relx) + "," + str(rely) + ")")
+
         # Validate new X and Y values
         newX, newY = self.validate_abs(newX, newY)
 
