@@ -11,10 +11,16 @@
 
  A NOTE ABOUT COORDINATES:
   You will find four types of coordnates used here:
-   * Screen coordinates  - 0,0 is the top,left corner of the chunk, and each step is a single character (column or line)
-   * Absolute coordnates - 0,0 is the top,left corner of the chunk, and each step is determined by self.width, self.height
-   * Relative coordnates - 0,0 is the center of the chunk, and each step is determined by self.width, self.height
-   * Offset coordinates  - 0,0 is the current position, and each step is determined by self.width, self.height
+   * Screen coordinates  - 0,0 is the top,left corner of the chunk, and each
+        step is a single character (column or line)
+   * Absolute coordnates - 0,0 is the top,left corner of the chunk, and each
+        step is determined by self.width, self.height
+   * Relative coordnates - 0,0 is the center of the map (not limited to a single
+        chunk), and each step is determined by self.width, self.height
+        OBJECTS STORE x/y AS RELATIVE COORDINATES
+   * Offset coordinates  - 0,0 is the current position, and each step is
+        determined by self.width, self.height
+        Useful for taking small steps (+/-1)
 """
 
 import curses, pickle, sqlite3, time, random
@@ -48,7 +54,7 @@ class InputValidation:
          Returns the validated integer or throws an exception
         """
         if type(val) != type(int()):
-            raise TypeError(str(name) + " is not type int")
+            raise TypeError(str(name) + " is not type int (" + str(type(val)).split("'")[1] + ")")
         if type(minval) == type(int()):
             if val < minval:
                 raise ValueError(str(name) + " < " + str(minval) + " (" + str(val) + ")")
@@ -63,7 +69,7 @@ class InputValidation:
          Returns the validated string or throws an exception
         """
         if type(val) != type(str()) and type(val) != type(u''):
-            raise TypeError(str(name) + " is not type str (" + str(val) + " = " + str(type(val)) + ")")
+            raise TypeError(str(name) + " is not type str (" + str(type(val)).split("'")[1] + ")")
         if blank == False and val == '':
             raise ValueError(str(name) + " == ''")
         return str(val)
@@ -74,7 +80,7 @@ class InputValidation:
          Returns the validated dictionary or throws an exception
         """
         if type(val) != type({}):
-            raise TypeError(str(name) + " is not type dict")
+            raise TypeError(str(name) + " is not type dict (" + str(type(val)).split("'")[1] + ")")
         if type(mincount) == type(int()):
             if len(val) < mincount:
                 raise ValueError(str(name) + " len() < " + str(mincount) + " (" + str(len(val)) + ")")
@@ -100,7 +106,7 @@ class InputValidation:
 
     def validate_win(self, win, name):
         if str(type(win)) != "<type '_curses.curses window'>":
-            raise TypeError(str(name) + " is not a Curses window")
+            raise TypeError(str(name) + " is not a Curses window (" + str(type(val)).split("'")[1] + ")")
         return win
 
 class TwoDimCommon(InputValidation):
@@ -196,11 +202,11 @@ class TwoDimCommon(InputValidation):
          Returns a tuple containing the validated coordinates or raises an exception
         """
         if type(x) != type(int()):
-            raise TypeError('x is not type int')
+            raise TypeError('x is not type int (' + str(type(x)).split("'")[1] + ")")
         if type(y) != type(int()):
-            raise TypeError('y is not type int')
+            raise TypeError('y is not type int (' + str(type(y)).split("'")[1] + ")")
         # Relative coordinates are no longer limited in scope to a single chunk
-        # TODO: Update coord doc at ToF
+        #  so as long as they pass  the integer test, they are good ot go
         return (x, y)
 
     def validate_abs(self, x, y):
@@ -210,9 +216,9 @@ class TwoDimCommon(InputValidation):
         """
         # self.debug("validate_abs(" + str(x) + ", " + str(y) + ")")
         if type(x) != type(int()):
-            raise TypeError('x is not type int')
+            raise TypeError('x is not type int (' + str(type(x)).split("'")[1] + ")")
         if type(y) != type(int()):
-            raise TypeError('y is not type int')
+            raise TypeError('y is not type int (' + str(type(y)).split("'")[1] + ")")
         if x < 0:
             raise ValueError("x < 0 (" + str(x) + ")")
         if x > self.world.chunksize - 1:
