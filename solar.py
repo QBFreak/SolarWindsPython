@@ -104,10 +104,40 @@ class InputValidation:
                 raise ValueError(str(name) + " len() > " + str(maxcount) + " (" + str(len(val)) + ")")
         return val
 
-    def validate_win(self, win, name):
+    def validate_win(self, win, name, falseok=False):
+        if falseok and win == False:
+            return win
         if str(type(win)) != "<type '_curses.curses window'>":
             raise TypeError(str(name) + " is not a Curses window (" + str(type(val)).split("'")[1] + ")")
         return win
+
+    def validate_smp(self, val, name):
+        if str(type(val)) != "<class 'opensimplex.opensimplex.OpenSimplex'>":
+            raise TypeError(str(name) + " is not an OpenSimplex object (" + str(type(val)).split("'")[1] + ")")
+        return val
+
+    def validate_worldset(self, val, name):
+        "Checks an object to ensure it is a TwoDimWorldSettings object"
+        if str(type(val)) != "<type 'instance'>":
+            raise TypeError(str(name) + " is not a TwoDimWorldSettings object (" + str(type(val)).split("'")[1] + ")")
+        else:
+            if str(type(val)).split("'")[1] == "instance" and val.__class__.__name__ == "TwoDimWorldSettings":
+                return val
+            else:
+                raise TypeError(str(name) + " is not a TwoDimWorldSettings object (" + str(type(val)).split("'")[1] + " " + val.__class__.__name__ +  ")")
+        return val
+
+    def validate_db(self, val, name):
+        "Checks a db object to ensure that it is a sqlite3 Connection OR that it's a bool (disabled)"
+        if str(type(val)) != "<type 'sqlite3.Connection'>" and type(val) != type(bool()):
+            raise TypeError(str(name) + " is not a sqlite3 Connection (" + str(type(val)).split("'")[1] + ")")
+        return val
+
+    def validate_dbcur(self, val, name):
+        "Checks a db cursor object to ensure it is a sqlite3 Crsor OR that it's a bool (disabled)"
+        if str(type(val)) != "<type 'sqlite3.Cursor'>" and type(val) != type(bool()):
+            raise TypeError(str(name) + " is not a sqlite3 Cursor (" + str(type(val)).split("'")[1] + ")")
+        return val
 
 class TwoDimCommon(InputValidation):
     # self.xoffset = int(worldset.chunksize / 2)
@@ -270,9 +300,18 @@ class TwoDimWorldSettings(InputValidation):
         markermap={1:'#'},
         colormap={1,Colors.DARK_GREEN},
         width=2,
-        height=1):
+        height=1,
+        debugwin=False,
+        db=False,
+        c=False):
         "Stores the settings for a two-dimensional world"
         # Validate and store the settings
+        # Validate debugwin first so that everything else can access it
+        if debugwin == False:
+            # Allow debugwin the possibility of being set false (debug disabled)
+            self.debugwin = False
+        else:
+            self.debugwin = self.validate_win(debugwin, 'debugwin')
         self.seed = self.validate_int(seed, 'seed')
         self.chunksize = self.validate_int(chunksize, 'chunksize', minval=1)
         self.defmarker = self.validate_str(defmarker, 'defmarker', blank=False)
@@ -281,15 +320,18 @@ class TwoDimWorldSettings(InputValidation):
         self.colormap = self.validate_dict(colormap, 'colormap', mincount=1)
         self.width = self.validate_int(width, 'width', minval=1, maxval=chunksize)
         self.height = self.validate_int(height, 'height', minval=1, maxval=chunksize)
+        # TODO: Update all the db stuff to use self.db and self.c
+        self.db = self.validate_db(db, 'db')
+        self.c = self.validate_dbcur(c, 'c')
 
 class TwoDimWorld(TwoDimCommon):
     def __init__(self, simplexobj, worldsettings, db, dbcur, debugwin = ""):
-        # TODO: Validate input
-        self.smp = simplexobj
-        self.world = worldsettings
-        self.db = db
-        self.c = dbcur
-        self.debugwin = debugwin
+        # Set this before we do ANYTHING so that if possible we have a debug window
+        self.debugwin = self.validate_win(worldsettings.debugwin, 'debugwin', falseok=True)
+        self.smp = self.validate_smp(simplexobj, 'simplexobj')
+        self.world = self.validate_worldset(worldsettings, 'worldsettings')
+        self.db = self.validate_db(db, 'db')
+        self.c = self.validate_dbcur(dbcur, 'dbcur')
 
     def genchunk(self, chunkX, chunkY, replace=False):
         """
@@ -372,10 +414,16 @@ class TwoDimDrawing(TwoDimCommon):
 
 
     def drawchunk(self, dbcur, chunkX, chunkY, win, xoffset=0, yoffset=0, drawobjs=True):
-        # TODO: Documentation
+        """
+        Draws the chunk specified by chunkX,chunkY onto curses window win
+         Also draws objects located on same chunk, unless drawobjs == False
+        """
+        # Validate params
+        dbcur = self.validate_dbcur(dbcur, 'dbcur')
         chunkX = self.validate_int(chunkX, 'chunkX')
         chunkY = self.validate_int(chunkY, 'chunkY')
         win = self.validate_win(win, 'win')
+        xoffset, yoffset = self.validate_rel(xoffset, yoffset)
         dbcur.execute("SELECT data FROM chunks WHERE x=" + str(chunkX) + " AND y=" + str(chunkY))
         records = dbcur.fetchall()
         if len(records) < 1:
