@@ -59,6 +59,7 @@ def main(stdscr):
         debugwin = stdscr.derwin(h - 1 - ( worldset.chunksize + 1), w - 1,  worldset.chunksize + 1, 0)
         debugwin.scrollok(True)
         debugwin.idlok(1)
+        worldset.debugwin = debugwin
 
     # We can't show this any earlier, the debug window hasn't been created yet
     debug("Program started")
@@ -72,6 +73,8 @@ def main(stdscr):
     # Connect to the database
     db = sqlite3.connect(DBFILE)
     c = db.cursor()
+    worldset.db = db
+    worldset.c = c
 
     # Set up the database
     c.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name='chunks'")
