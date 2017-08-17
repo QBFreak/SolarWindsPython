@@ -129,7 +129,6 @@ def main(stdscr):
     else:
         for rec in records:
             objects.append(painter.db2moveable(rec, painter, db, c, terrwin, chunkX, chunkY))
-            # TODO: Find where we did [len(objects) - 1] (or was it records) and change to [-1]
 
     painter.drawchunk(c, chunkX, chunkY, terrwin, drawobjs=True)
 

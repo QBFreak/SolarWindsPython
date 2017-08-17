@@ -104,7 +104,25 @@ class InputValidation:
                 raise ValueError(str(name) + " len() > " + str(maxcount) + " (" + str(len(val)) + ")")
         return val
 
+    def validate_tup(self, val, name, mincount=False, maxcount=False):
+        """
+        Ensure that a value is a tuple and the count of enties is within the
+         range (if specified)
+         Returns the validated tuple or throws an exception
+        """
+        if type(val) != type(()):
+            raise ValueError(str(name) + " is not type tuple (" + str(type(val)).split("'")[1] + ")")
+        if len(val) > maxcount:
+            raise ValueError(str(name) + " len() > " + str(maxcount))
+        if len(val)  < mincount:
+            raise ValueError(str(name) + " len() < " + str(mincount))
+        return val
+
     def validate_win(self, win, name, falseok=False):
+        """
+        Ensure that a value is a curses window,
+         or optionally evaluates to False (falseok=True)
+        """
         if falseok and win == False:
             return win
         if str(type(win)) != "<type '_curses.curses window'>":
@@ -112,12 +130,17 @@ class InputValidation:
         return win
 
     def validate_smp(self, val, name):
+        """
+        Ensure that a value is an OpenSimplex object
+        """
         if str(type(val)) != "<class 'opensimplex.opensimplex.OpenSimplex'>":
             raise TypeError(str(name) + " is not an OpenSimplex object (" + str(type(val)).split("'")[1] + ")")
         return val
 
     def validate_worldset(self, val, name):
-        "Checks an object to ensure it is a TwoDimWorldSettings object"
+        """
+        Ensure that a value is a TwoDimWorldSettings object
+        """
         if str(type(val)) != "<type 'instance'>":
             raise TypeError(str(name) + " is not a TwoDimWorldSettings object (" + str(type(val)).split("'")[1] + ")")
         else:
@@ -128,13 +151,17 @@ class InputValidation:
         return val
 
     def validate_db(self, val, name):
-        "Checks a db object to ensure that it is a sqlite3 Connection OR that it's a bool (disabled)"
+        """
+        Ensure that a value is a sqlite3 Connection OR that it's a bool (disabled)
+        """
         if str(type(val)) != "<type 'sqlite3.Connection'>" and type(val) != type(bool()):
             raise TypeError(str(name) + " is not a sqlite3 Connection (" + str(type(val)).split("'")[1] + ")")
         return val
 
     def validate_dbcur(self, val, name):
-        "Checks a db cursor object to ensure it is a sqlite3 Crsor OR that it's a bool (disabled)"
+        """
+        Ensures a value is a sqlite3 db cursor OR that it's a bool (disabled)
+        """
         if str(type(val)) != "<type 'sqlite3.Cursor'>" and type(val) != type(bool()):
             raise TypeError(str(name) + " is not a sqlite3 Cursor (" + str(type(val)).split("'")[1] + ")")
         return val
@@ -145,6 +172,7 @@ class TwoDimCommon(InputValidation):
 
     ## YOU MUST SET xoffset AND yoffset IN __init__() USING ABOVE FORMULA ##
     ######## THIS APPLIES TO ALL OBJECTS THAT SUBCLASS TwoDimCommon ########
+    # TODO: Put this in __init__()
 
     def debug(self, text):
         """
@@ -260,6 +288,9 @@ class TwoDimCommon(InputValidation):
         return (x, y)
 
     def db2object(self, record, chunkX, chunkY):
+        """
+        Returns a TwoDimObject from a previously unpickled db record
+        """
         # self.debug("db2object: " + str(record[1]) + ", " + str(record[2]))
         return TwoDimObject(self.world,
                             objid=self.validate_int(record[0], 'objid', minval=0),
@@ -274,6 +305,9 @@ class TwoDimCommon(InputValidation):
                             debugwin=self.validate_win(self.debugwin, 'debugwin'))
 
     def db2moveable(self, record, painter, db, c, win, chunkX, chunkY):
+        """
+        Returns a TwoDimMoveable from a previously unpickled db record
+        """
         return TwoDimMoveable(  self.world,
                                 painter,
                                 db,
@@ -372,7 +406,7 @@ class TwoDimWorld(TwoDimCommon):
 
     def loadchunk(self, chunkX, chunkY, loadneighbors=True):
         """
-        Loads a chunk from the database and returns the chunk database
+        Loads a chunk from the database and returns the chunk dataset
         If the chunk does not exist in the database, a new one is generated
         If loadneighbors == True (defaut) it will also generate any missing chunks
          in a 3x3 grid surrounding the specified chunk
@@ -395,6 +429,7 @@ class TwoDimWorld(TwoDimCommon):
 
 class TwoDimChunk(TwoDimCommon):
     def __init__(self, dataset, world, chunkX=0, chunkY=0):
+        "A two-dimensional chunk of the game world"
         self.world = world
         # Validate and set dataset
         self.dataset = self.validate_list(dataset, 'dataset', mincount=self.world.chunksize, maxcount=self.world.chunksize)
@@ -406,6 +441,7 @@ class TwoDimChunk(TwoDimCommon):
 
 class TwoDimDrawing(TwoDimCommon):
     def __init__(self, worldsettings, debugwin=0):
+        "Handles drawing onto curses windows of two-dimensional chunks and objects"
         self.world = worldsettings
         self.debugwin = debugwin
         # TODO: Use superclass constructor instead to set xoffset/yoffset
@@ -449,33 +485,54 @@ class TwoDimDrawing(TwoDimCommon):
         dbcur.execute("SELECT rowid,* FROM objects WHERE rowid IS NOT " + str(objid) + " AND x=" + str(x) + " AND y=" + str(y))
         records = dbcur.fetchall()
         if len(records):
-            self.drawobjectfromrecord(records[len(records) - 1], chunkX, chunkY, win, xoffset, yoffset, refresh)
+            self.drawobjectfromrecord(records[-1], chunkX, chunkY, win, xoffset, yoffset, refresh)
         else:
             self.drawmarker(dataset, win, x, y, xoffset, yoffset, refresh)
 
     def drawmarker(self, dataset, win, x, y, xoffset=0, yoffset=0, refresh=True):
-        # TODO: Data validation, documentation
-        scrx, scry = self.abs2screen(x + xoffset, y + yoffset)
+        """
+        Draws and colors the (terrain) marker from dataset onto window win
+         located at x,y in dataset. xoffset,yoffset adjust the position of x,y
+         BEFORE it is converted to screen coords. When refresh==True the window
+         will be refreshed at the end
+        """
+        relx, rely = self.validate_rel(x + xoffset, y + yoffset)
+        scrx, scry = self.abs2screen(relx, rely)
         win.addstr(scrx, scry, self.getmarker(x,y,dataset)*self.world.width)
         win.chgat(scrx, scry, self.world.width, self.getcolor(x,y,dataset))
         if refresh:
             win.refresh
 
     def drawobjectfromrecord(self, rec, chunkX, chunkY, win, xoffset=0, yoffset=0, refresh=True):
-        # TODO: Data validation, documentation
+        """
+        Draws an object from an (depickled) object record
+         chunkX,chunkY are a necessary evil at this moment as they are required
+         to construct a new TwoDimObject/TwoDimMoveable
+        """
+        # Validate the incoming record
+        rec = self.validate_tup(rec, 'rec', mincount=9, maxcount=9)
+        # Convert it into a TwoDimObject
         obj = self.db2object(rec, chunkX, chunkY)
-        # self.debug("Drawing object " + str(rec[0]) + " at " + str(obj.x) + "," + str(obj.y))
+        # Determine our screen coordinates, taking into account any x/y offset prior to coversion
         scrx, scry = self.rel2screen(obj.x + xoffset, obj.y + yoffset)
+        # Draw tbe icon on the screen, making it the appropriate width
         win.addstr(scrx, scry, obj.icon*obj.width)
+        # Change the color of the icon on the screen
         win.chgat(scrx, scry, obj.width, self.color2attr(obj.color))
+        # Regfresh the screen/window, but only if requested
         if refresh:
             win.refresh()
 
     def drawlocation(self, dbcur, win, chunkX, chunkY, x, y, xoffset=0, yoffset=0, refresh=True):
-        # TODO: Data validation, documentation
+        """
+        Draws the chunk terrain or top-most object located at the specified
+         coordinates
+        """
         # TODO: Objects need chunkX and chunkY
         #        or do we just calculate it from x,y? That seems cleaner
         # self.debug("DRAWLOCATION(" + str(x) + "," + str(y) + ")")
+        dbcur = self.validate_dbcur(dbcur, "dbcur")
+        x, y = self.validate_abs(x, y)
         dbcur.execute("SELECT data FROM chunks WHERE x=" + str(chunkX) + " AND y=" + str(chunkY))
         records = dbcur.fetchall()
         if len(records) < 1:
