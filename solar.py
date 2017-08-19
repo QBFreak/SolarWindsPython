@@ -176,15 +176,15 @@ class TwoDimCommon(InputValidation):
 
     def debug(self, text):
         """
-        Write the text to the curses window 'self.debugwin', followed by a newline
-         only adds text if 'self.debugwin' is a curses window
+        Write the text to the curses window 'self.world.debugwin', followed by
+         a newline. Only adds text if 'self.world.debugwin' is a curses window
         """
         # Check and see if we have a curses window
-        if str(type(self.debugwin)) == "<type '_curses.curses window'>":
+        if str(type(self.world.debugwin)) == "<type '_curses.curses window'>":
             # Add the text to the window, along with a newline
-            self.debugwin.addstr(str(text) + "\n")
+            self.world.debugwin.addstr(str(text) + "\n")
             # Refresh the window to update the screen
-            self.debugwin.refresh()
+            self.world.debugwin.refresh()
 
     def abs2rel(self, x, y):
         """
@@ -301,17 +301,14 @@ class TwoDimCommon(InputValidation):
                             icon=self.validate_str(record[5], 'icon', blank=False),
                             width=self.validate_int(record[6], 'width', minval=0, maxval=self.world.chunksize),
                             height=self.validate_int(record[7], 'height', minval=0, maxval=self.world.chunksize),
-                            color=self.validate_int(record[8], 'color'),
-                            debugwin=self.validate_win(self.debugwin, 'debugwin'))
+                            color=self.validate_int(record[8], 'color'))
 
-    def db2moveable(self, record, painter, db, c, win, chunkX, chunkY):
+    def db2moveable(self, record, painter, win, chunkX, chunkY):
         """
         Returns a TwoDimMoveable from a previously unpickled db record
         """
         return TwoDimMoveable(  self.world,
                                 painter,
-                                db,
-                                c,
                                 self.validate_win(win, 'win'),
                                 objid=self.validate_int(record[0], 'objid', minval=0),
                                 x=self.validate_int(record[1], 'x'),
@@ -321,8 +318,7 @@ class TwoDimCommon(InputValidation):
                                 icon=self.validate_str(record[5], 'icon', blank=False),
                                 width=self.validate_int(record[6], 'width', minval=0, maxval=self.world.chunksize),
                                 height=self.validate_int(record[7], 'height', minval=0, maxval=self.world.chunksize),
-                                color=self.validate_int(record[8], 'color'),
-                                debugwin=self.validate_win(self.debugwin, 'debugwin'))
+                                color=self.validate_int(record[8], 'color'))
 
 class TwoDimWorldSettings(InputValidation):
     def __init__(self,
@@ -341,11 +337,7 @@ class TwoDimWorldSettings(InputValidation):
         "Stores the settings for a two-dimensional world"
         # Validate and store the settings
         # Validate debugwin first so that everything else can access it
-        if debugwin == False:
-            # Allow debugwin the possibility of being set false (debug disabled)
-            self.debugwin = False
-        else:
-            self.debugwin = self.validate_win(debugwin, 'debugwin')
+        self.debugwin = self.validate_win(debugwin, 'debugwin', falseok=True)
         self.seed = self.validate_int(seed, 'seed')
         self.chunksize = self.validate_int(chunksize, 'chunksize', minval=1)
         self.defmarker = self.validate_str(defmarker, 'defmarker', blank=False)
@@ -359,13 +351,10 @@ class TwoDimWorldSettings(InputValidation):
         self.c = self.validate_dbcur(c, 'c')
 
 class TwoDimWorld(TwoDimCommon):
-    def __init__(self, simplexobj, worldsettings, db, dbcur, debugwin = ""):
+    def __init__(self, simplexobj, worldsettings):
         # Set this before we do ANYTHING so that if possible we have a debug window
-        self.debugwin = self.validate_win(worldsettings.debugwin, 'debugwin', falseok=True)
         self.smp = self.validate_smp(simplexobj, 'simplexobj')
         self.world = self.validate_worldset(worldsettings, 'worldsettings')
-        self.db = self.validate_db(db, 'db')
-        self.c = self.validate_dbcur(dbcur, 'dbcur')
 
     def genchunk(self, chunkX, chunkY, replace=False):
         """
@@ -389,19 +378,19 @@ class TwoDimWorld(TwoDimCommon):
             i += 1
 
         if count > 0 and replace == True:
-            self.c.execute("DELETE FROM chunks WHERE x=" + str(chunkX) + " and y=" + str(chunkY))
-            self.db.commit()
+            self.world.c.execute("DELETE FROM chunks WHERE x=" + str(chunkX) + " and y=" + str(chunkY))
+            self.world.db.commit()
         if count == 0 or replace == True:
-            self.c.execute("INSERT INTO chunks (x, y, data) VALUES (" + str(chunkX) +  ", " + str(chunkY) + ", " + "'" + pickle.dumps(dataset) + "'" + ")")
-            self.db.commit()
+            self.world.c.execute("INSERT INTO chunks (x, y, data) VALUES (" + str(chunkX) +  ", " + str(chunkY) + ", " + "'" + pickle.dumps(dataset) + "'" + ")")
+            self.world.db.commit()
         return dataset
 
     def chunksindb(self, chunkX, chunkY):
         """
         Returns the number of chunks in the database for chunkX,chunkY
         """
-        self.c.execute("SELECT * FROM chunks WHERE x=" + str(chunkX) + " and y=" + str(chunkY))
-        records = self.c.fetchall()
+        self.world.c.execute("SELECT * FROM chunks WHERE x=" + str(chunkX) + " and y=" + str(chunkY))
+        records = self.world.c.fetchall()
         return len(records)
 
     def loadchunk(self, chunkX, chunkY, loadneighbors=True):
@@ -419,8 +408,8 @@ class TwoDimWorld(TwoDimCommon):
                     # attempt to load  the chunk so that any that don't exist are created
                     dataset = self.loadchunk(x, y, loadneighbors=False)
 
-        self.c.execute("SELECT * FROM chunks WHERE x=" + str(chunkX) + " and y=" + str(chunkY))
-        records = self.c.fetchall()
+        self.world.c.execute("SELECT * FROM chunks WHERE x=" + str(chunkX) + " and y=" + str(chunkY))
+        records = self.world.c.fetchall()
         if len(records) < 1:
             dataset = self.genchunk(chunkX, chunkY)
         else:
@@ -440,28 +429,26 @@ class TwoDimChunk(TwoDimCommon):
         self.chunkY = self.validate_int(chunkY, 'chunkY')
 
 class TwoDimDrawing(TwoDimCommon):
-    def __init__(self, worldsettings, debugwin=0):
+    def __init__(self, worldsettings):
         "Handles drawing onto curses windows of two-dimensional chunks and objects"
         self.world = worldsettings
-        self.debugwin = debugwin
         # TODO: Use superclass constructor instead to set xoffset/yoffset
         self.xoffset = int(worldsettings.chunksize / 2)
         self.yoffset = int(worldsettings.chunksize / 2)
 
 
-    def drawchunk(self, dbcur, chunkX, chunkY, win, xoffset=0, yoffset=0, drawobjs=True):
+    def drawchunk(self, chunkX, chunkY, win, xoffset=0, yoffset=0, drawobjs=True):
         """
         Draws the chunk specified by chunkX,chunkY onto curses window win
          Also draws objects located on same chunk, unless drawobjs == False
         """
         # Validate params
-        dbcur = self.validate_dbcur(dbcur, 'dbcur')
         chunkX = self.validate_int(chunkX, 'chunkX')
         chunkY = self.validate_int(chunkY, 'chunkY')
         win = self.validate_win(win, 'win')
         xoffset, yoffset = self.validate_rel(xoffset, yoffset)
-        dbcur.execute("SELECT data FROM chunks WHERE x=" + str(chunkX) + " AND y=" + str(chunkY))
-        records = dbcur.fetchall()
+        self.world.c.execute("SELECT data FROM chunks WHERE x=" + str(chunkX) + " AND y=" + str(chunkY))
+        records = self.world.c.fetchall()
         if len(records) < 1:
             raise ValueError("Chunk " + str(chunkX) + "," + str(chunkY) + " not found in database")
         dataset = pickle.loads(records[0][0])
@@ -469,8 +456,8 @@ class TwoDimDrawing(TwoDimCommon):
         for x in range(self.world.chunksize):
             for y in range(self.world.chunksize):
                 self.drawmarker(dataset, win, x, y, xoffset, yoffset, refresh=False)
-        dbcur.execute("SELECT rowid,* FROM objects")
-        records = dbcur.fetchall()
+        self.world.c.execute("SELECT rowid,* FROM objects")
+        records = self.world.c.fetchall()
         if len(records) > 0:
             # self.debug("There are " + str(len(records)) + " objects to be displayed")
             for rec in records:
@@ -478,12 +465,12 @@ class TwoDimDrawing(TwoDimCommon):
                 self.drawobjectfromrecord(rec, chunkX, chunkY, win, xoffset, yoffset, refresh=False)
         win.refresh()
 
-    def eraseobject(self, dbcur, objid, dataset, win, x, y, chunkX=0, chunkY=0, xoffset=0, yoffset=0, refresh=True):
+    def eraseobject(self,objid, dataset, win, x, y, chunkX=0, chunkY=0, xoffset=0, yoffset=0, refresh=True):
         # TODO: Data validation, documentation
         # REMOVE? Pretty sure we're not using this
         #  at least TEST it...
-        dbcur.execute("SELECT rowid,* FROM objects WHERE rowid IS NOT " + str(objid) + " AND x=" + str(x) + " AND y=" + str(y))
-        records = dbcur.fetchall()
+        self.world.c.execute("SELECT rowid,* FROM objects WHERE rowid IS NOT " + str(objid) + " AND x=" + str(x) + " AND y=" + str(y))
+        records = self.world.c.fetchall()
         if len(records):
             self.drawobjectfromrecord(records[-1], chunkX, chunkY, win, xoffset, yoffset, refresh)
         else:
@@ -523,7 +510,7 @@ class TwoDimDrawing(TwoDimCommon):
         if refresh:
             win.refresh()
 
-    def drawlocation(self, dbcur, win, chunkX, chunkY, x, y, xoffset=0, yoffset=0, refresh=True):
+    def drawlocation(self, win, chunkX, chunkY, x, y, xoffset=0, yoffset=0, refresh=True):
         """
         Draws the chunk terrain or top-most object located at the specified
          coordinates
@@ -531,16 +518,15 @@ class TwoDimDrawing(TwoDimCommon):
         # TODO: Objects need chunkX and chunkY
         #        or do we just calculate it from x,y? That seems cleaner
         # self.debug("DRAWLOCATION(" + str(x) + "," + str(y) + ")")
-        dbcur = self.validate_dbcur(dbcur, "dbcur")
         x, y = self.validate_abs(x, y)
-        dbcur.execute("SELECT data FROM chunks WHERE x=" + str(chunkX) + " AND y=" + str(chunkY))
-        records = dbcur.fetchall()
+        self.world.c.execute("SELECT data FROM chunks WHERE x=" + str(chunkX) + " AND y=" + str(chunkY))
+        records = self.world.c.fetchall()
         if len(records) < 1:
             raise ValueError("Chunk " + str(chunkX) + "," + str(chunkY) + " not found in database")
         dataset = pickle.loads(records[0][0])
         relx, rely = self.abs2rel(x, y)
-        dbcur.execute("SELECT rowid,* FROM objects WHERE x=" + str(relx) + " AND y=" + str(rely))
-        records = dbcur.fetchall()
+        self.world.c.execute("SELECT rowid,* FROM objects WHERE x=" + str(relx) + " AND y=" + str(rely))
+        records = self.world.c.fetchall()
         if len(records) > 0:
             # self.debug("There are " + str(len(records)) + " objects to be displayed (DRAWLOCATION)")
             for rec in records:
@@ -588,15 +574,13 @@ class TwoDimDrawing(TwoDimCommon):
 
 class TwoDimObject(TwoDimCommon):
     # RELATIVE COORDINATES
-    def __init__(self, worldset, chunkX=0, chunkY=0, objid=1, x=0, y=0, icon='@', width=0, height=0, color=Colors.BRIGHT_RED, debugwin=""):
-        # Validate and set the debug window
-        self.debugwin = self.validate_win(debugwin, 'debugwin')
+    def __init__(self, worldset, chunkX=0, chunkY=0, objid=1, x=0, y=0, icon='@', width=0, height=0, color=Colors.BRIGHT_RED):
+        # TODO: Validate
+        self.world = worldset
         # self.debug("Creating object " + icon + " at " + str(x) + ", " + str(y))
         # Validate and set the object id (database record number)
         self.objid = self.validate_int(objid, 'objid', minval=1)
         # Set the world settings
-        # TODO: Validate
-        self.world = worldset
         # Update the x/y offsets for the relative coordinates (within the chunk) to the new chunksize
         self.xoffset = int(self.world.chunksize / 2)
         self.yoffset = int(self.world.chunksize / 2)
@@ -624,8 +608,6 @@ class TwoDimMoveable(TwoDimObject):
     def __init__(self,
                  worldset,
                  painter,
-                 db,
-                 c,
                  win,
                  chunkX=0,
                  chunkY=0,
@@ -635,26 +617,22 @@ class TwoDimMoveable(TwoDimObject):
                  icon='@',
                  width=0,
                  height=0,
-                 color=Colors.BRIGHT_RED,
-                 debugwin=""):
-        #super(TwoDimMoveable, self).__init__(worldset, chunkX, chunkY, x, y, icon, width, height, color, debugwin)
-        TwoDimObject.__init__(self, worldset, chunkX, chunkY, objid, x, y, icon, width, height, color, debugwin)
+                 color=Colors.BRIGHT_RED):
+        TwoDimObject.__init__(self, worldset, chunkX, chunkY, objid, x, y, icon, width, height, color)
         # TODO: Fix other subclasses to call super-class constructors for common things like setting x/yoffset and debugwin
         # TODO: validate
         self.painter = painter
-        self.db = db
-        self.c = c
         self.win = self.validate_win(win, 'win')
 
     def write2db(self):
-        self.c.execute("SELECT rowid FROM objects WHERE rowid=" + str(self.objid))
-        records = self.c.fetchall()
+        self.world.c.execute("SELECT rowid FROM objects WHERE rowid=" + str(self.objid))
+        records = self.world.c.fetchall()
         if len(records) > 0:
-            self.c.execute("UPDATE objects SET x=" + str(self.x) + ", y=" + str(self.y) + ", chunkX=" + str(self.chunkX) + ", chunkY=" + str(self.chunkY) + ", icon=" + "'" + self.icon + "'" + ", width=" + str(self.width) + ", height=" + str(self.height) + ", color=" + str(self.color)  + " WHERE rowid=" + str(self.objid) )
+            self.world.c.execute("UPDATE objects SET x=" + str(self.x) + ", y=" + str(self.y) + ", chunkX=" + str(self.chunkX) + ", chunkY=" + str(self.chunkY) + ", icon=" + "'" + self.icon + "'" + ", width=" + str(self.width) + ", height=" + str(self.height) + ", color=" + str(self.color)  + " WHERE rowid=" + str(self.objid) )
         else:
-            self.c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(self.x) + ", " + str(self.y) + ", " + str(self.chunkX) + ", " + str(self.chunkY) + ", " + self.icon + ", " + str(self.width) + ", " + str(self.height) + ", " + str(self.color) + ")")
+            self.world.c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(self.x) + ", " + str(self.y) + ", " + str(self.chunkX) + ", " + str(self.chunkY) + ", " + self.icon + ", " + str(self.width) + ", " + str(self.height) + ", " + str(self.color) + ")")
         # self.debug("Wrote object " + self.icon + " at " + str(self.x) + ", " + str(self.y) + " to the database")
-        self.db.commit()
+        self.world.db.commit()
 
     def move(self, newX, newY):
         "Pretty alias for moverelative()"
@@ -679,8 +657,8 @@ class TwoDimMoveable(TwoDimObject):
             # Update the database
             self.write2db()
             # Repaint the relevant portions of the screen
-            self.painter.drawlocation(self.c, self.win, self.chunkX, self.chunkY, oldabsx, oldabsy, refresh=True)
-            self.painter.drawlocation(self.c, self.win, self.chunkX, self.chunkY, newX, newY, refresh=True)
+            self.painter.drawlocation(self.win, self.chunkX, self.chunkY, oldabsx, oldabsy, refresh=True)
+            self.painter.drawlocation(self.win, self.chunkX, self.chunkY, newX, newY, refresh=True)
 
     def moverelative(self, newX, newY):
         "Move object to a new position using relative coordinates x,y"

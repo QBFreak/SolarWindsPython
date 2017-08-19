@@ -31,7 +31,7 @@ debugwin = "" # Needs an initial value if we intend to use it as a global
 
 def main(stdscr):
     "Main program"
-    global debugwin
+    global debugwin, worldset
 
     # Find out the dimensions of our main winow
     w = stdscr.getmaxyx()[1]
@@ -92,7 +92,7 @@ def main(stdscr):
 
     # Set up the world
     smp = OpenSimplex(seed=worldset.seed)
-    world = solar.TwoDimWorld(smp, worldset, db, c, debugwin)
+    world = solar.TwoDimWorld(smp, worldset)
 
     chunkX = 0
     chunkY = 0
@@ -101,7 +101,7 @@ def main(stdscr):
     dataset = world.loadchunk(chunkX, chunkY)
 
     chunk = solar.TwoDimChunk(dataset, worldset, chunkX, chunkY)
-    painter = solar.TwoDimDrawing(worldset, debugwin)
+    painter = solar.TwoDimDrawing(worldset)
 
     # Create the player
     objects = []
@@ -109,28 +109,28 @@ def main(stdscr):
     records = c.fetchall()
     if len(records) < 1:
         # chunkX/Y and x/y all default to 0,0. All the other defaults are sane too
-        objects.append(solar.TwoDimMoveable(worldset, painter, db, c, terrwin, objid=1, debugwin=debugwin))
+        objects.append(solar.TwoDimMoveable(worldset, painter, terrwin, objid=1))
         # debug("Object " + objects[-1].icon + " created at " + str(objects[-1].x) + "," + str(objects[-1].y))
         c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(objects[-1].x) + "," + str(objects[-1].y) + ","  + str(objects[-1].chunkX) + "," + str(objects[-1].chunkY) + "," + "'" + str(objects[-1].icon) + "'" + "," + str(objects[-1].width) + "," + str(objects[-1].height) + "," + str(objects[-1].color) + ")")
         db.commit()
         # debug("Object " + objects[-1].icon + " written to the database")
 
-        objects.append(solar.TwoDimMoveable(worldset, painter, db, c, terrwin, icon='%', objid=1, debugwin=debugwin))
+        objects.append(solar.TwoDimMoveable(worldset, painter, terrwin, icon='%', objid=1))
         # debug("Object " + objects[-1].icon + " created at " + str(objects[-1].x) + "," + str(objects[-1].y))
         c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(objects[-1].x) + "," + str(objects[-1].y) + "," + str(objects[-1].chunkX) + "," + str(objects[-1].chunkY) + "," + "'" + str(objects[-1].icon) + "'" + "," + str(objects[-1].width) + "," + str(objects[-1].height) + "," + str(objects[-1].color) + ")")
         db.commit()
         # debug("Object " + objects[-1].icon + " written to the database")
 
-        objects.append(solar.TwoDimMoveable(worldset, painter, db, c, terrwin, icon='&', color=Colors.BRIGHT_CYAN, x=5, y=5, objid=1, debugwin=debugwin))
+        objects.append(solar.TwoDimMoveable(worldset, painter, terrwin, icon='&', color=Colors.BRIGHT_CYAN, x=5, y=5, objid=1))
         # debug("Object " + objects[-1].icon + " created at " + str(objects[-1].x) + "," + str(objects[-1].y))
         c.execute("INSERT INTO objects (x, y, chunkX, chunkY, icon, width, height, color) VALUES (" + str(objects[-1].x) + "," + str(objects[-1].y) + "," + str(objects[-1].chunkX) + "," + str(objects[-1].chunkY) + "," + "'" + str(objects[-1].icon) + "'" + "," + str(objects[-1].width) + "," + str(objects[-1].height) + "," + str(objects[-1].color) + ")")
         db.commit()
         # debug("Object " + objects[-1].icon + " written to the database")
     else:
         for rec in records:
-            objects.append(painter.db2moveable(rec, painter, db, c, terrwin, chunkX, chunkY))
+            objects.append(painter.db2moveable(rec, painter, terrwin, chunkX, chunkY))
 
-    painter.drawchunk(c, chunkX, chunkY, terrwin, drawobjs=True)
+    painter.drawchunk(chunkX, chunkY, terrwin, drawobjs=True)
 
     curobj = 0
     debug("Waiting for user input, Q to quit")
@@ -164,7 +164,7 @@ def main(stdscr):
             #  block below an elif:, so we just assign keypress to itself so we do
             #  SOMETHING that equates to NOTHING
             keypress = keypress
-        elif is_int(keypress):
+        elif is_str_int(keypress):
             # If the key pressed was a number (1-9), select an object
             if int(keypress) > 0 and int(keypress) < 10:
                 # Make sure the selected object exists
@@ -173,9 +173,9 @@ def main(stdscr):
                     curobj = int(keypress) - 1
                     debug("Object " + objects[curobj].icon + " selected")
                 else:
-                    debug("Invalid object " + str(keypress) + " selected")
+                    debug("Invalid selection, object " + str(keypress))
             else:
-                debug("Invalid object " + str(keypress) + " selected")
+                debug("Invalid selection, object " + str(keypress))
         else:
             debug("Unknown key pressed: " + str(keypress))
 
@@ -202,6 +202,17 @@ def printwin(win, text):
 def is_int(val):
     "Returns true if val is an integer"
     return type(val) == type(int())
+
+def is_str_int(val):
+    "Returns true if val is a string with a value that is an integer"
+    if type(val) == type(str()):
+        try:
+            val = int(val)
+            return True
+        except Exception as e:
+            return False
+    else:
+        return False
 
 ## Use the curses wrapper to call main so that the console still gets cleaned
 ##  up if we throw an unhandled exception
