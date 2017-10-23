@@ -1,0 +1,5 @@
+*.pyc
+*.db
+.python-version
+commit-log.txt
+.remote-sync.json
