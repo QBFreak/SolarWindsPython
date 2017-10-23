@@ -5,6 +5,7 @@
   * pickle          included with python
   * random			included with python
   * sqlite3			included with python 2.5+
+  * time            included with python
   * OpenSimplex 	pip install opensimplex
 
   TL;DR: Python 2.5+, pip install opensimplex
